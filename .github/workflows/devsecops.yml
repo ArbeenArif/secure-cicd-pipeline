@@ -216,7 +216,7 @@ jobs:
           docker logs app
           exit 1
       - name: ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://localhost:5000
           rules_file_name: .zap/rules.tsv
