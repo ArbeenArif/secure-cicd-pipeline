@@ -1,0 +1,5 @@
+-r app/requirements.txt
+pytest==9.0.3
+pytest-cov==6.0.0
+bandit==1.9.4
+pip-audit==2.7.3

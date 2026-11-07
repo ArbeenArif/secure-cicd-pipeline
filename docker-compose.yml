@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    image: secure-cicd-demo:local
+    ports:
+      - "5000:5000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
