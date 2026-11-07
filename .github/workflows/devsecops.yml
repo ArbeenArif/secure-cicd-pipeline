@@ -1,3 +1,4 @@
+
 name: DevSecOps Secure CI/CD
 
 on:
@@ -7,9 +8,9 @@ on:
     branches: [main]
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * 1" # weekly re-scan to catch newly disclosed CVEs
+    - cron: "0 3 * * 1"
 
-# Least privilege by default; jobs elevate only what they need.
+# Least privilege by default
 permissions:
   contents: read
 
@@ -22,108 +23,143 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ---------------------------------------------------------------- 1. SECRETS
+
+  # ---------------------------------------------------------
+  # 1. SECRET SCANNING
+  # ---------------------------------------------------------
   secret-scan:
     name: 1 - Secret scanning (Gitleaks)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # full history so old commits are scanned too
+          fetch-depth: 0
+
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ---------------------------------------------------------------- 2. SAST
+  # ---------------------------------------------------------
+  # 2. SAST
+  # ---------------------------------------------------------
   sast:
     name: 2 - SAST (Bandit + Semgrep)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - name: Install scanners
         run: pip install bandit==1.8.0 semgrep
+
       - name: Bandit (Python security linter)
         run: |
           mkdir -p reports
           bandit -r app -f json -o reports/bandit.json --severity-level medium || true
           bandit -r app --severity-level medium --confidence-level medium
+
       - name: Semgrep (OWASP Top 10 + Python rulesets)
         run: |
           semgrep scan --config p/python --config p/owasp-top-ten --config p/secrets \
             --error --sarif --output reports/semgrep.sarif app
+
       - name: Upload SARIF to GitHub code scanning
         if: always() && hashFiles('reports/semgrep.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/semgrep.sarif
           category: semgrep
-        continue-on-error: true # code scanning upload needs a public repo or GHAS
+        continue-on-error: true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sast-reports
           path: reports/
 
-  # ---------------------------------------------------------------- 3. SCA
+  # ---------------------------------------------------------
+  # 3. SOFTWARE COMPOSITION ANALYSIS
+  # ---------------------------------------------------------
   sca:
     name: 3 - Dependency scan (pip-audit)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - run: pip install pip-audit==2.7.3
-      - name: Audit pinned dependencies against the OSV/PyPI advisory DB
+
+      - name: Audit dependencies
         run: |
           mkdir -p reports
           pip-audit -r app/requirements.txt --format json --output reports/pip-audit.json || true
           pip-audit -r app/requirements.txt --strict
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: sca-report
           path: reports/
 
-  # ---------------------------------------------------------------- 4. TEST
+  # ---------------------------------------------------------
+  # 4. UNIT TESTING
+  # ---------------------------------------------------------
   test:
     name: 4 - Unit tests + coverage
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
       - run: pip install -r requirements-dev.txt
-      - name: Run pytest (fail under 85% coverage)
-        run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+
+      - name: Run pytest (85% coverage required)
+        run: |
+          pytest --cov=app --cov-report=term-missing \
+            --cov-report=xml --cov-fail-under=85
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.xml
 
-  # ---------------------------------------------------------------- 5. BUILD
+  # ---------------------------------------------------------
+  # 5. DOCKER BUILD
+  # ---------------------------------------------------------
   build:
     name: 5 - Lint Dockerfile + build image
     runs-on: ubuntu-latest
-    needs: [secret-scan, sast, sca, test] # quality + security gates before building
+    needs: [secret-scan, sast, sca, test]
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Hadolint (Dockerfile best practices)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
+
       - uses: docker/setup-buildx-action@v3
+
       - name: Build image
         uses: docker/build-push-action@v6
         with:
@@ -133,15 +169,19 @@ jobs:
           build-args: APP_VERSION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
       - name: Export image for downstream jobs
         run: docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} -o image.tar
+
       - uses: actions/upload-artifact@v4
         with:
           name: image
           path: image.tar
           retention-days: 1
 
-  # ---------------------------------------------------------------- 6. IMAGE SCAN + SBOM
+  # ---------------------------------------------------------
+  # 6. IMAGE SCAN + SBOM
+  # ---------------------------------------------------------
   container-scan:
     name: 6 - Image scan (Trivy) + SBOM
     runs-on: ubuntu-latest
@@ -149,12 +189,15 @@ jobs:
     permissions:
       contents: read
       security-events: write
+
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: image
+
       - run: docker load -i image.tar
-      - name: Trivy - report all severities (SARIF for the Security tab)
+
+      - name: Trivy - report all severities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -162,6 +205,7 @@ jobs:
           output: trivy.sarif
           ignore-unfixed: true
           exit-code: "0"
+
       - name: Upload Trivy SARIF
         if: always() && hashFiles('trivy.sarif') != ''
         uses: github/codeql-action/upload-sarif@v3
@@ -169,7 +213,8 @@ jobs:
           sarif_file: trivy.sarif
           category: trivy
         continue-on-error: true
-      - name: Trivy - GATE (fail on HIGH/CRITICAL with a fix available)
+
+      - name: Trivy - GATE (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
@@ -177,6 +222,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
       - name: Generate SBOM (CycloneDX)
         uses: anchore/sbom-action@v0
         with:
@@ -184,6 +230,7 @@ jobs:
           format: cyclonedx-json
           output-file: sbom.cdx.json
           upload-artifact: false
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -192,7 +239,9 @@ jobs:
             trivy.sarif
             sbom.cdx.json
 
-  # ---------------------------------------------------------------- 7. DAST
+  # ---------------------------------------------------------
+  # 7. DAST - OWASP ZAP
+  # ---------------------------------------------------------
   dast:
     name: 7 - DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
@@ -200,56 +249,84 @@ jobs:
     permissions:
       contents: read
       issues: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: image
+
       - run: docker load -i image.tar
+
       - name: Start the app container
         run: |
           docker run -d --name app -p 5000:5000 ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
           for i in $(seq 1 20); do
-            curl -fs http://localhost:5000/health && exit 0
+            if curl -fs http://localhost:5000/health; then
+              exit 0
+            fi
             sleep 2
           done
+
           docker logs app
           exit 1
+
       - name: ZAP baseline scan
-        uses: zaproxy/action-baseline@v0.12.0
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: http://localhost:5000
           rules_file_name: .zap/rules.tsv
           fail_action: false
           allow_issue_writing: false
-          artifact_name: zap-report
+          artifact_name: zap_scan
+
       - name: Gate - fail on any HIGH-risk ZAP alert
+        if: always()
         run: |
-          HIGH=$(jq '[.site[].alerts[] | select(.riskcode=="3")] | length' report_json.json)
+          if [ ! -f report_json.json ]; then
+            echo "ZAP JSON report was not generated."
+            exit 1
+          fi
+
+          HIGH=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+
           echo "High-risk alerts: $HIGH"
+
           [ "$HIGH" -eq 0 ]
 
-  # ---------------------------------------------------------------- 8. PUBLISH
+  # ---------------------------------------------------------
+  # 8. PUBLISH + SIGN IMAGE
+  # ---------------------------------------------------------
   publish:
     name: 8 - Publish + sign image (main only)
     runs-on: ubuntu-latest
     needs: [container-scan, dast]
+
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
     permissions:
       contents: read
       packages: write
-      id-token: write # keyless signing with Sigstore
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: docker/setup-buildx-action@v3
+
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - id: meta
-        run: echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
-      - name: Push (re-uses build cache from the scanned build)
+        run: |
+          echo "image=${REGISTRY}/${GITHUB_REPOSITORY,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Push Docker image
         id: push
         uses: docker/build-push-action@v6
         with:
@@ -262,6 +339,9 @@ jobs:
           cache-from: type=gha
           provenance: true
           sbom: true
+
       - uses: sigstore/cosign-installer@v3
+
       - name: Sign image (keyless)
-        run: cosign sign --yes ${{ steps.meta.outputs.image }}@${{ steps.push.outputs.digest }}
+        run: |
+          cosign sign --yes ${{ steps.meta.outputs.image }}@${{ steps.push.outputs.digest }}
