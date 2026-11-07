@@ -155,7 +155,7 @@ jobs:
           name: image
       - run: docker load -i image.tar
       - name: Trivy - report all severities (SARIF for the Security tab)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: sarif
@@ -170,7 +170,7 @@ jobs:
           category: trivy
         continue-on-error: true
       - name: Trivy - GATE (fail on HIGH/CRITICAL with a fix available)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
           format: table
