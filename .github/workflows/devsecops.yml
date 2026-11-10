@@ -170,6 +170,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Verify setuptools versions in both Python installations
+      - name: Verify Python security package versions
+        run: |
+          docker run --rm --entrypoint sh ${{ env.IMAGE_NAME }}:${{ github.sha }} -c '
+            echo "Virtual environment:"
+            /opt/venv/bin/python -m pip show setuptools
+            echo "System Python:"
+            /usr/local/bin/python -m pip show setuptools
+          '
+
       - name: Export image for downstream jobs
         run: docker save ${{ env.IMAGE_NAME }}:${{ github.sha }} -o image.tar
 
