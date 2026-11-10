@@ -35,3 +35,8 @@ htmlcov/
 
 # Security scan reports
 .zap/
+# Cosign local test keys
+cosign.key
+cosign.pub
+*.sig
+*.bundle
