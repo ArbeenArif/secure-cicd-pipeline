@@ -1,19 +1,28 @@
+
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim-bookworm AS builder
+FROM python:3.12-slim-trixie AS builder
 
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build
 COPY app/requirements.txt .
+
 RUN python -m venv /opt/venv \
+    && /opt/venv/bin/python -m pip install --no-cache-dir --upgrade pip setuptools \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-trixie
 
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION} \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# Upgrade system-level pip
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools 
+RUN apt-get update \
+    && apt-get install -y --only-upgrade zlib1g \
+    && rm -rf /var/lib/apt/lists/*
 
 # Run as an unprivileged user with no login shell
 RUN groupadd --system --gid 10001 app \
