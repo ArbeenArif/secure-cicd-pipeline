@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevSecOps Security Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/script.js" defer></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">🛡️ Secure CI/CD</div>
+        <span class="status"><span class="dot"></span> Application Dashboard</span>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">DEVSECOPS PROJECT</p>
+            <h1>DevSecOps Security Dashboard</h1>
+            <p>Secure. Test. Scan. Build. Deploy.</p>
+            <button id="healthBtn">Check Application Health</button>
+            <p id="healthResult" class="result" aria-live="polite"></p>
+        </section>
+
+        <section class="cards">
+            <article class="card">
+                <h3>Application</h3>
+                <p class="big">Flask API</p>
+                <p>Backend service</p>
+            </article>
+            <article class="card">
+                <h3>Pipeline</h3>
+                <p class="big">8 Stages</p>
+                <p>Automated security checks</p>
+            </article>
+            <article class="card">
+                <h3>Container</h3>
+                <p class="big">Docker</p>
+                <p>Containerized application</p>
+            </article>
+        </section>
+
+        <section class="panel">
+            <h2>Test the Greeting API</h2>
+            <p>Enter your name to test the Flask backend.</p>
+            <div class="form-row">
+                <input id="nameInput" type="text" maxlength="50"
+                       placeholder="Enter your name">
+                <button id="greetBtn">Send</button>
+            </div>
+            <p id="greetResult" class="result" aria-live="polite"></p>
+        </section>
+
+        <section class="panel">
+            <h2>DevSecOps Pipeline</h2>
+            <p>Security stages implemented in our GitHub Actions workflow.</p>
+            <div class="stages">
+                <div>01 · Gitleaks – Secret Scanning</div>
+                <div>02 · Bandit + Semgrep – Code Analysis</div>
+                <div>03 · pip-audit – Dependency Scanning</div>
+                <div>04 · Pytest – Automated Testing</div>
+                <div>05 · Hadolint + Docker – Image Build</div>
+                <div>06 · Trivy + CycloneDX – Image Scan & SBOM</div>
+                <div>07 · OWASP ZAP – Dynamic Security Testing</div>
+                <div>08 · GHCR + Cosign – Publish & Sign</div>
+            </div>
+        </section>
+
+        <footer>
+            DevSecOps-Based Secure CI/CD Pipeline
+        </footer>
+    </main>
+</body>
+</html>

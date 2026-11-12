@@ -1,3 +1,4 @@
+
 import os
 import sys
 
@@ -24,6 +25,12 @@ def test_index(client):
     res = client.get("/")
     assert res.status_code == 200
     assert res.get_json()["service"] == "secure-cicd-demo"
+
+
+def test_dashboard(client):
+    res = client.get("/dashboard")
+    assert res.status_code == 200
+    assert b"DevSecOps Security Dashboard" in res.data
 
 
 def test_greet_default_and_named(client):
