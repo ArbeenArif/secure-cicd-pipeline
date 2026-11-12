@@ -10,7 +10,6 @@ on:
   schedule:
     - cron: "0 3 * * 1"
 
-# Least privilege by default
 permissions:
   contents: read
 
@@ -24,9 +23,7 @@ concurrency:
 
 jobs:
 
-  # ---------------------------------------------------------
   # 1. SECRET SCANNING
-  # ---------------------------------------------------------
   secret-scan:
     name: 1 - Secret scanning (Gitleaks)
     runs-on: ubuntu-latest
@@ -39,9 +36,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ---------------------------------------------------------
   # 2. SAST
-  # ---------------------------------------------------------
   sast:
     name: 2 - SAST (Bandit + Semgrep)
     runs-on: ubuntu-latest
@@ -85,9 +80,7 @@ jobs:
           name: sast-reports
           path: reports/
 
-  # ---------------------------------------------------------
   # 3. SOFTWARE COMPOSITION ANALYSIS
-  # ---------------------------------------------------------
   sca:
     name: 3 - Dependency scan (pip-audit)
     runs-on: ubuntu-latest
@@ -114,9 +107,7 @@ jobs:
           name: sca-report
           path: reports/
 
-  # ---------------------------------------------------------
   # 4. UNIT TESTING
-  # ---------------------------------------------------------
   test:
     name: 4 - Unit tests + coverage
     runs-on: ubuntu-latest
@@ -141,9 +132,7 @@ jobs:
           name: coverage
           path: coverage.xml
 
-  # ---------------------------------------------------------
   # 5. DOCKER BUILD
-  # ---------------------------------------------------------
   build:
     name: 5 - Lint Dockerfile + build image
     runs-on: ubuntu-latest
@@ -170,7 +159,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Verify setuptools versions in both Python installations
       - name: Verify Python security package versions
         run: |
           docker run --rm --entrypoint sh ${{ env.IMAGE_NAME }}:${{ github.sha }} -c '
@@ -189,9 +177,7 @@ jobs:
           path: image.tar
           retention-days: 1
 
-  # ---------------------------------------------------------
   # 6. IMAGE SCAN + SBOM
-  # ---------------------------------------------------------
   container-scan:
     name: 6 - Image scan (Trivy) + SBOM
     runs-on: ubuntu-latest
@@ -249,9 +235,7 @@ jobs:
             trivy.sarif
             sbom.cdx.json
 
-  # ---------------------------------------------------------
   # 7. DAST - OWASP ZAP
-  # ---------------------------------------------------------
   dast:
     name: 7 - DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
@@ -286,7 +270,7 @@ jobs:
       - name: ZAP baseline scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
-          target: http://localhost:5000
+          target: http://localhost:5000/dashboard
           rules_file_name: .zap/rules.tsv
           fail_action: false
           allow_issue_writing: false
@@ -306,9 +290,7 @@ jobs:
 
           [ "$HIGH" -eq 0 ]
 
-  # ---------------------------------------------------------
   # 8. PUBLISH + SIGN IMAGE
-  # ---------------------------------------------------------
   publish:
     name: 8 - Publish + sign image (main only)
     runs-on: ubuntu-latest

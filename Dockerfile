@@ -36,13 +36,19 @@ RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --no-create-home --shell /usr/sbin/nologin app
 
 COPY --from=builder /opt/venv /opt/venv
+
 # Remove stale embedded pip SBOM that causes Trivy false positives
 RUN find /opt/venv /usr/local/lib/python3.12/site-packages \
     -type f -path '*/pip/_vendor/bom.cdx.json' -delete
 
 WORKDIR /srv/app
 
+# Copy Flask backend
 COPY --chown=app:app app/app.py .
+
+# Copy frontend files
+COPY --chown=app:app app/templates ./templates
+COPY --chown=app:app app/static ./static
 
 USER 10001:10001
 
