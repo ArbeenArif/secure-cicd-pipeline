@@ -9,8 +9,6 @@ It follows secure-coding basics:
 """
 import os
 import re
-import sqlite3
-import time
 
 from flask import Flask, jsonify, request, render_template
 
@@ -18,44 +16,6 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024
 
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9 _.-]{1,50}$")
-RATE_LIMIT = 5
-RATE_WINDOW = 60
-RATE_LIMIT_DB = os.environ.get(
-    "RATE_LIMIT_DB",
-    os.path.join(os.environ.get("TEMP", "/tmp"), "rate_limit.db")
-)
-def is_rate_limited(client_id):
-    now = int(time.time())
-
-    with sqlite3.connect(RATE_LIMIT_DB, timeout=5) as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS api_requests (
-                client_id TEXT NOT NULL,
-                request_time INTEGER NOT NULL
-            )
-        """)
-
-        db.execute("BEGIN IMMEDIATE")
-
-        db.execute(
-            "DELETE FROM api_requests WHERE request_time <= ?",
-            (now - RATE_WINDOW,)
-        )
-
-        count = db.execute(
-            "SELECT COUNT(*) FROM api_requests WHERE client_id = ?",
-            (client_id,)
-        ).fetchone()[0]
-
-        if count >= RATE_LIMIT:
-            return True
-
-        db.execute(
-            "INSERT INTO api_requests VALUES (?, ?)",
-            (client_id, now)
-        )
-
-        return False
 
 
 @app.after_request
@@ -114,19 +74,6 @@ def greet():
 
     if not NAME_PATTERN.fullmatch(name):
         return jsonify(error="invalid name"), 400
-
-    return jsonify(message=f"Hello, {name}!")
-@app.route("/api/limited-greet")
-def limited_greet():
-    name = request.args.get("name", "world")
-
-    if not NAME_PATTERN.fullmatch(name):
-        return jsonify(error="invalid name"), 400
-
-    client_id = request.remote_addr or "unknown"
-
-    if is_rate_limited(client_id):
-        return jsonify(error="rate limit exceeded. Try again later."), 429
 
     return jsonify(message=f"Hello, {name}!")
 
