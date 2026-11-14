@@ -6,12 +6,20 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
-from app import app  # noqa: E402
+import app as app_module  # noqa: E402
+
+app = app_module.app
 
 
 @pytest.fixture()
-def client():
+def client(tmp_path):
     app.config["TESTING"] = True
+
+    # Give each test its own rate-limit database
+    app_module.RATE_LIMIT_DB = str(tmp_path / "rate_limit.db")
+    app_module.RATE_LIMIT = 5
+    app_module.RATE_WINDOW = 60
+
     return app.test_client()
 
 
@@ -36,6 +44,23 @@ def test_dashboard(client):
 def test_greet_default_and_named(client):
     assert client.get("/api/greet").get_json()["message"] == "Hello, world!"
     assert client.get("/api/greet?name=Arif").get_json()["message"] == "Hello, Arif!"
+
+
+def test_limited_greet_allows_five_requests(client):
+    for _ in range(5):
+        res = client.get("/api/limited-greet?name=Arbeen")
+        assert res.status_code == 200
+        assert res.get_json()["message"] == "Hello, Arbeen!"
+
+
+def test_limited_greet_blocks_sixth_request(client):
+    for _ in range(5):
+        client.get("/api/limited-greet?name=Arbeen")
+
+    res = client.get("/api/limited-greet?name=Arbeen")
+
+    assert res.status_code == 429
+    assert res.get_json()["error"] == "rate limit exceeded. Try again later."
 
 
 @pytest.mark.parametrize(
