@@ -7,9 +7,11 @@ It follows secure-coding basics:
 * no secrets in code
 * no shell/eval/pickle usage
 """
+
 import os
 import re
 import sqlite3
+import tempfile
 import time
 
 from flask import Flask, jsonify, request, render_template
@@ -18,13 +20,20 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024
 
 NAME_PATTERN = re.compile(r"^[A-Za-z0-9 _.-]{1,50}$")
+
+# API rate-limiting configuration
 RATE_LIMIT = 5
 RATE_WINDOW = 60
+
 RATE_LIMIT_DB = os.environ.get(
     "RATE_LIMIT_DB",
-    os.path.join(os.environ.get("TEMP", "/tmp"), "rate_limit.db")
+    os.path.join(tempfile.gettempdir(), "rate_limit.db")
 )
+
+
 def is_rate_limited(client_id):
+    """Allow only five requests per client within 60 seconds."""
+
     now = int(time.time())
 
     with sqlite3.connect(RATE_LIMIT_DB, timeout=5) as db:
@@ -93,11 +102,16 @@ def index():
     return jsonify(
         service="secure-cicd-demo",
         version=os.environ.get("APP_VERSION", "dev"),
-        endpoints=["/health", "/api/greet?name=<text>", "POST /api/echo"],
+        endpoints=[
+            "/health",
+            "/api/greet?name=<text>",
+            "/api/limited-greet?name=<text>",
+            "POST /api/echo"
+        ],
     )
 
 
-# New frontend dashboard
+# Frontend dashboard
 @app.route("/dashboard")
 def dashboard():
     return render_template("index.html")
@@ -116,6 +130,9 @@ def greet():
         return jsonify(error="invalid name"), 400
 
     return jsonify(message=f"Hello, {name}!")
+
+
+# New API endpoint with rate limiting
 @app.route("/api/limited-greet")
 def limited_greet():
     name = request.args.get("name", "world")
@@ -126,7 +143,9 @@ def limited_greet():
     client_id = request.remote_addr or "unknown"
 
     if is_rate_limited(client_id):
-        return jsonify(error="rate limit exceeded. Try again later."), 429
+        return jsonify(
+            error="rate limit exceeded. Try again later."
+        ), 429
 
     return jsonify(message=f"Hello, {name}!")
 
